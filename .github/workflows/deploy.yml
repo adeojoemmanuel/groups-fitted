@@ -1,0 +1,67 @@
+name: Deployment
+on:
+  pull_request:
+  push:
+    branches: [] 
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+      - name: Setup node
+        uses: actions/setup-node@v1
+        with:
+          node-version: 12
+      - name: Install dependencies
+        run: npm install
+      - name: Build Project
+        run: npm run build --if-present
+      - name: Lint Project
+        run: npm run lint
+      - name: Run Tests
+        run: npm run test --if-present
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          AT_KEY: ${{ secrets.AT_KEY }}
+          AT_USERNAME: ${{ secrets.AT_USERNAME }}
+          OTP_TTL: ${{ secrets.OTP_TTL }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          GROUP_INVITE_URL: ${{ secrets.GROUP_INVITE_URL }}
+          BOLD_METRICS_CLIENT_ID: ${{ secrets.BOLD_METRICS_CLIENT_ID }}
+          BOLD_METRICS_USER_KEY: ${{ secrets.BOLD_METRICS_USER_KEY }}
+          OUTFIT_BUYER_AFTER_FIRST_EVENT_EMAIL: $ {{ secrets.OUTFIT_BUYER_AFTER_FIRST_EVENT_EMAIL }}
+          RECIPIENT_INVITE_EMAIL_TEMPLATE: $ {{ secrets.RECIPIENT_INVITE_EMAIL_TEMPLATE }}
+          EXISTING_TAILOR_INVITE_EMAIL_TEMPLATE: $ {{ secrets.EXISTING_TAILOR_INVITE_EMAIL_TEMPLATE }}
+          UNREGISTERED_TAILOR_INVITE_EMAIL_TEMPLATE: $ {{ secrets.UNREGISTERED_TAILOR_INVITE_EMAIL_TEMPLATE }}
+          SENDGRID_FROM_EMAIL: $ {{ secrets.SENDGRID_FROM_EMAIL }}
+          EARLIEST_EVENT_DATE_GAP: ${{ secrets.EARLIEST_EVENT_DATE_GAP }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+          CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          PASSWORD_RECOVERY_TTL: ${{ secrets.PASSWORD_RECOVERY_TTL }}
+          PASSWORD_RECOVERY_EMAIL : ${{ secrets.PASSWORD_RECOVERY_EMAIL }}
+          PASSWORD_RECOVERY_URL : ${{ secrets.PASSWORD_RECOVERY_URL }}
+          RECIPIENT_INVITE_NEW_USER_EMAIL_TEMPLATE: ${{ secrets.RECIPIENT_INVITE_NEW_USER_EMAIL_TEMPLATE }}
+          PUSHER_SECRET_KEY: ${{ secrets.PUSHER_SECRET_KEY }}
+          PUSHER_INSTANCE_ID: ${{ secrets.PUSHER_INSTANCE_ID }}
+          ACCOUNT_VERIFICATION_TTL: ${{ secrets.ACCOUNT_VERIFICATION_TTL }}
+          ACCOUNT_VERIFICATION_EMAIL_TEMPLATE: ${{ secrets.ACCOUNT_VERIFICATION_EMAIL_TEMPLATE }}
+          ACCOUNT_VERIFICATION_URL: ${{ secrets.ACCOUNT_VERIFICATION_URL }}
+          EXISTING_USER_CREATE_EVENT_EMAIL_TEMPLATE: ${{ secrets.EXISTING_USER_CREATE_EVENT_EMAIL_TEMPLATE }}
+          TAILOR_LINK: ${{ secrets.TAILOR_LINK }}
+          TAILOR_SIGNUP_EMAIL_PASSWORD_ID: ${{ secrets.TAILOR_SIGNUP_EMAIL_PASSWORD_ID }}
+          TAILOR_SIGNUP_EMAIL_NO_PASSWORD_ID: ${{ secrets.TAILOR_SIGNUP_EMAIL_NO_PASSWORD_ID }}
+          TAILOR_RESET_PASSWORD: ${{ secrets.TAILOR_RESET_PASSWORD }}
+          TAILOR_SIGN_UP: ${{ secrets.TAILOR_RESET_PASSWORD }}
+          TAILOR_INVITE: ${{ secrets.TAILOR_INVITE }}
+
+
+
+
+

@@ -1,0 +1,342 @@
+import { BadRequestException, ConflictException } from "@nestjs/common";
+import { MongooseModule } from "@nestjs/mongoose";
+import { Test, TestingModule } from "@nestjs/testing";
+import * as moment from "moment";
+import * as mongoose from "mongoose";
+import { Model } from "mongoose";
+import { AuthModule } from "../../auth/auth.module";
+import { EmailVerificationSchema } from "../../auth/models/emailVerification.model";
+import { OtpVerificationSchema } from "../../auth/models/phoneVerification.model";
+import { MockUsersService } from "../../auth/__mocks__/usersService";
+import { config } from "../../config";
+import { NotificationsModule } from "../../notifications/notifications.module";
+import { NotificationsService } from "../../notifications/services/notifications.service";
+import {
+  OutfitBuyer,
+  OutfitBuyerDocument,
+} from "../../users/models/outfit-buyer.schema";
+import {
+  UserAccount,
+  UserAccountSchema,
+} from "../../users/models/user-account.schema";
+import { UsersService } from "../../users/services/users.service";
+import { UsersModule } from "../../users/users.module";
+import {
+  outfitBuyerStub,
+  userAccountStub,
+} from "../../users/__stubs__/modelStubs";
+import { Gender } from "../../utils/enums/gender.enum";
+import { ImageUploaderModule } from "../../utils/imageUploader/imageUploader.module";
+import { ImageUploaderService } from "../../utils/imageUploader/imageUploader.service";
+import { LoggerModule } from "../../utils/logger/logger.module";
+import { MailingModule } from "../../utils/mailing/mailing.module";
+import { MailingService } from "../../utils/mailing/mailing.service";
+import { MessagingModule } from "../../utils/messaging/messaging.module";
+import { MessagingService } from "../../utils/messaging/messaging.service";
+import {
+  closeInMongodConnection,
+  rootMongooseTestModule,
+} from "../../utils/tests/mongoMock";
+import { AddRecipientDto } from "../dto/add-recipient.dto";
+import { CreateEventAndSignupDto } from "../dto/create-event-signup.dto";
+import { CreateEventDto } from "../dto/create-event.dto";
+import { CreateGroupDto } from "../dto/create-group.dto";
+import { Event, EventSchema } from "../models/event.model";
+import {
+  GroupRecipientInvite,
+  GroupRecipientInviteSchema,
+} from "../models/group-invite.model";
+import {
+  GroupOutfitBuyer,
+  GroupOutfitBuyerSchema,
+} from "../models/group-outfit-buyers";
+import { GroupOutfitBuyerDocument } from "../models/group-outfit-buyers";
+import { Group, GroupSchema } from "../models/group.model";
+import { MeasurementStatus } from "../models/measurement-status.enum";
+import { PaymentMethod } from "../models/payment-method.enum";
+import { PaymentStatus } from "../models/payment-status.enum";
+import {
+  createEventAndSignupDtoStub,
+  createEventDtoStub,
+  createGroupDtoStub,
+} from "../__stubs__/dtoStubs";
+import { addRecipientDtoStub } from "../__stubs__/dtoStubs";
+import { groupStub } from "../__stubs__/modelStubs";
+import { GroupsService } from "./groups.service";
+
+describe("GroupsService", () => {
+  let groupsService: GroupsService;
+  let messagingService: MessagingService;
+  let mailingService: MailingService;
+  let outfitBuyerModel: Model<OutfitBuyerDocument>;
+
+  let groupOutfitBuyerModel: Model<GroupOutfitBuyerDocument>;
+  const MockImageUploaderService: ImageUploaderService = {
+    uploadEventImage: jest.fn().mockResolvedValue({
+      secure_url: "secureImageUrl",
+      public_id: "publicId",
+    }),
+    uploadMeasurementImage: jest.fn().mockResolvedValue({
+      secure_url: "secureImageUrl",
+      public_id: "publicId",
+    }),
+    deleteImage: jest.fn().mockResolvedValue(true),
+  };
+
+  const MockMailingService: MailingService = {
+    sendMessage: jest.fn().mockResolvedValue("Successful"),
+    sendConfirmationEmail: jest.fn().mockResolvedValue("Successful"),
+    sendOutfitBuyerFirstEventEmail: jest.fn().mockResolvedValue("Successful"),
+    sendCreateEventMail: jest.fn().mockResolvedValue("Successful"),
+    UserSignUpEmail: jest.fn().mockResolvedValue("Successful"),
+    sendPasswordRecoveryEmail: jest.fn().mockResolvedValue("Successful"),
+    sendGroupRecipientInvitation: jest.fn().mockResolvedValue("Successful"),
+    TailorSignUpWithPassword: jest.fn().mockResolvedValue("Successful"),
+    sendTailorMeasurement: jest.fn().mockResolvedValue("Successful"),
+  };
+
+  // const MockNotificationsService: NotificationsService = {
+  //   uploadEventImage: jest.fn().mockResolvedValue({
+  //     secure_url: 'secureImageUrl',
+  //     public_id: 'publicId',
+  //   }),
+  //   deleteEventImage: jest.fn().mockResolvedValue(true),
+  // };
+
+  beforeAll(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      imports: [
+        AuthModule,
+        UsersModule,
+        NotificationsModule,
+        rootMongooseTestModule(),
+        MailingModule,
+        LoggerModule,
+        MessagingModule,
+        ImageUploaderModule,
+        MongooseModule.forFeature([
+          { name: Group.name, schema: GroupSchema },
+          { name: Event.name, schema: EventSchema },
+          { name: GroupOutfitBuyer.name, schema: GroupOutfitBuyerSchema },
+          {
+            name: GroupRecipientInvite.name,
+            schema: GroupRecipientInviteSchema,
+          },
+        ]),
+      ],
+      providers: [GroupsService],
+    })
+      .overrideProvider(UsersService)
+      .useValue(MockUsersService)
+      .overrideProvider(ImageUploaderService)
+      .useValue(MockImageUploaderService)
+      .overrideProvider(MailingService)
+      .useValue(MockMailingService)
+      .compile();
+
+    groupsService = module.get<GroupsService>(GroupsService);
+    messagingService = module.get<MessagingService>(MessagingService);
+    mailingService = module.get<MailingService>(MailingService);
+    outfitBuyerModel = module.get<Model<OutfitBuyerDocument>>(
+      "OutfitBuyerModel"
+    );
+    groupOutfitBuyerModel = module.get<Model<GroupOutfitBuyerDocument>>(
+      "GroupOutfitBuyerModel"
+    );
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("should be defined", () => {
+    expect(groupsService).toBeDefined();
+  });
+
+  describe("addGroup()", () => {
+    it("should create a new group and add the initiator as the first group member", async () => {
+      const outfitBuyer: OutfitBuyer = outfitBuyerStub();
+      const createGroupDto: CreateGroupDto = createGroupDtoStub();
+
+      const response = await groupsService.addGroup(
+        outfitBuyer.userAccount,
+        createGroupDto
+      );
+      expect(response.members).toHaveLength(1);
+      expect(response.admins).toHaveLength(1);
+      expect(response.members[0].toString()).toEqual(outfitBuyer.id);
+      expect(response.admins[0].toString()).toEqual(outfitBuyer.id);
+      expect(response.gender).toEqual(Gender.Male);
+      expect(response.event.toString()).toEqual(createGroupDto.eventId);
+    });
+  });
+
+  describe("createEvent()", () => {
+    it("should create a new event and a default group for the event", async () => {
+      jest.spyOn(groupsService, "generateUniqueEventLink");
+      const createEventDto: CreateEventDto = createEventDtoStub();
+      const user: UserAccount = userAccountStub();
+      // let creator: OutfitBuyer = await outfitBuyerModel.create({userAccount: userAccountStub().id}); MockUsersService will do the trick
+
+      const file: any = { content: "fileContent" }; // dummy object
+      const response = await groupsService.createEvent(
+        createEventDto,
+        user,
+        file,
+        false
+      );
+      expect(groupsService.generateUniqueEventLink).toHaveBeenCalledTimes(1);
+      expect(groupsService.generateUniqueEventLink).toHaveBeenCalledWith(
+        createEventDto.name
+      );
+      expect(response).toHaveProperty("group");
+      expect(response).toHaveProperty("event");
+      expect(response.event.name).toEqual(createEventDto.name);
+      expect(response.event.creator.toString()).toEqual(outfitBuyerStub().id);
+    });
+
+    it("should throw exception for a date lesser than 2weeks from current day", async () => {
+      const { date, ...event } = createEventDtoStub();
+      const user: UserAccount = userAccountStub();
+      const createEventDto: CreateEventDto = new CreateEventDto(event);
+      createEventDto.date = moment()
+        .add(config.minEventStartDate, "days")
+        .toDate(); // new Date();
+      console.log(createEventDto);
+
+      const file: any = { content: "fileContent" }; // dummy object
+      const response = groupsService.createEvent(
+        createEventDto,
+        user,
+        file,
+        false
+      );
+      await expect(response).rejects.toThrowError();
+      await expect(response).rejects.toThrowError(BadRequestException);
+    });
+  });
+
+  describe("createEventAndSignup()", () => {
+    it("should signup a new user and create a new event, group", async () => {
+      jest
+        .spyOn(mailingService, "sendOutfitBuyerFirstEventEmail")
+        .mockResolvedValueOnce("Successful");
+      const createEventAndSignupDto: CreateEventAndSignupDto = createEventAndSignupDtoStub();
+      const file: any = { content: "fileContent" }; // dummy object
+      const response = await groupsService.createEventAndSignup(
+        createEventAndSignupDto,
+        file
+      );
+      expect(response).toHaveProperty("accessToken");
+      expect(response).toHaveProperty("outfitBuyer");
+      expect(response).toHaveProperty("event");
+      expect(response).toHaveProperty("group");
+    });
+  });
+
+  describe("addKnownRecipientToGroup()", () => {
+    it("should throw error if outfit buyer recipient is already a group member", async () => {
+      jest
+        .spyOn(groupsService, "checkRecipientInGroup")
+        .mockResolvedValueOnce(true);
+      const addRecipientDto: AddRecipientDto = addRecipientDtoStub();
+      const response = groupsService.addKnownRecipientToGroup(
+        outfitBuyerStub().id,
+        addRecipientDto,
+        userAccountStub()
+      );
+      await expect(response).rejects.toThrowError();
+      await expect(response).rejects.toThrowError(ConflictException);
+      await expect(response).rejects.toThrowError(
+        `${addRecipientDto.firstName} with email ${addRecipientDto.email} is already in this group`
+      );
+    });
+
+    it("should not throw any errors if recipient not in group", async () => {
+      jest
+        .spyOn(groupsService, "checkRecipientInGroup")
+        .mockResolvedValueOnce(false);
+      const addRecipientDto: AddRecipientDto = addRecipientDtoStub();
+      const response = await groupsService.addKnownRecipientToGroup(
+        outfitBuyerStub().id,
+        addRecipientDto,
+        userAccountStub()
+      );
+      expect(groupsService.checkRecipientInGroup).toHaveBeenCalledTimes(1);
+      expect(groupsService.checkRecipientInGroup).toHaveBeenCalledWith(
+        ...[outfitBuyerStub().id, addRecipientDto.groupId]
+      );
+    });
+  });
+
+  describe("addRecipientToGroup()", () => {
+    // leave me alone
+  });
+
+  describe("acceptGroupRecipientInvitation()", () => {
+    // leave me alone
+  });
+
+  describe("removeRecipientFromGroup()", () => {
+    // leave me alone
+  });
+
+  describe("checkRecipientInGroup()", () => {
+    it("should return true if recipient is a group member", async () => {
+      await groupOutfitBuyerModel.create({
+        group: groupStub().id,
+        outfitBuyer: outfitBuyerStub().id,
+        isAdmin: true,
+        useInitiatorTailor: true,
+        canChooseTailor: true,
+        useInitiatorMeasurementToken: true,
+        measurementStatus: MeasurementStatus.NotTaken,
+        paymentMethod: PaymentMethod.None,
+        paymentStatus: PaymentStatus.NotPaid,
+        dateAdded: new Date(),
+        dateJoined: new Date(),
+      });
+      const response = await groupsService.checkRecipientInGroup(
+        outfitBuyerStub().id,
+        groupStub().id
+      );
+      expect(response).toEqual(true);
+    });
+
+    it("should return false if recipient is a group member", async () => {
+      await groupOutfitBuyerModel
+        .findOneAndDelete({
+          group: groupStub().id,
+          outfitBuyer: outfitBuyerStub().id,
+        })
+        .exec();
+      const response = await groupsService.checkRecipientInGroup(
+        outfitBuyerStub().id,
+        groupStub().id
+      );
+      expect(response).toEqual(false);
+    });
+  });
+
+  describe("checkUserIsGroupInitiator()", () => {
+    // leave me alone
+  });
+
+  describe("checkInviteExists()", () => {
+    // leave me alone
+  });
+
+  describe("editGroupRecipientInvitation()", () => {
+    // leave me alone
+  });
+
+  describe("checkUserIsGroupInitiator()", () => {
+    // leave me alone
+  });
+
+  afterAll(async () => {
+    await closeInMongodConnection();
+    mongoose.disconnect();
+    mongoose.connection.close();
+  });
+});
